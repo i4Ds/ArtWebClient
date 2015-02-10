@@ -1,0 +1,609 @@
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title>Kunstexploration 3D</title>
+		<style>
+			html, body {
+				width: 100%;
+				height: 100%;
+			}
+
+			body {
+				margin: 0;
+				overflow: hidden;
+			}
+		</style>
+	</head>
+	<body>
+		<script src="CocoonJSExtensions/CocoonJS.js"></script>
+		<script src="CocoonJSExtensions/CocoonJS_App.js"></script>
+		<script src="CocoonJSExtensions/CocoonJS_App_ForCocoonJS.js"></script>
+		<script src="js/three.js"></script>
+		<script src="js/BufferGeometryUtils.js"></script>
+		<script src="js/PointerLockControls.js"></script>
+		<script src="js/Detector.js"></script>
+		
+		<script src="js/GestureManager/Namespace.js"></script>
+		<script src="js/GestureManager/GestureManager.js"></script>
+		<script src="js/GestureManager/GestureRecognizer.js"></script>
+		<script src="js/GestureManager/GR_Tap.js"></script>
+		<script src="js/GestureManager/GR_LongTap.js"></script>
+		<script src="js/GestureManager/GR_DoubleTap.js"></script>
+		<script src="js/GestureManager/GR_Swipe.js"></script>
+		<script src="js/GestureManager/GR_PinchZoom.js"></script>
+		<script src="js/GestureManager/GR_TouchMove.js"></script>
+		
+		<!-- Mootools is used for the whole class and eventing system -->
+		<script src="js/mootools-core-1.4.5_cocoon.js"></script>
+		<script src="js/ArtCluster.js"></script>
+		<script src="js/pointerlockUsage.js"></script>
+		<script src="js/Skybox.js"></script>
+		<script src="js/NavigationCircle.js"></script>
+		<script src="js/ZoomLevels.js"></script>
+		<script src="js/TypedArrayUtils.js"></script>
+		<script src="js/Debug3D.js"></script>
+
+		<script type="x-shader/x-vertex" id="vertexshader">
+			
+			uniform float zoom;
+		
+			attribute float atlasIndex;
+
+			varying float vAtlasIndex;
+			varying vec2 vUv;
+			
+			const float imagesPerRowOnAtlasSmall = 128.0;
+			const float imagesPerRowOnAtlasBig = 16.0;
+			const float multipleIndexScale = 1024.0;
+
+			void main() {
+			
+				float multiIndex = 0.0;
+			
+				vAtlasIndex = atlasIndex;
+				if (atlasIndex < 0.0) {
+					//vUv = vec2(0.0, 0.0); //uv
+					
+					float imagePositionOnAtlasSmall = -atlasIndex - 1.0;
+					float y = floor(imagePositionOnAtlasSmall / imagesPerRowOnAtlasSmall);
+					vUv = vec2( (imagePositionOnAtlasSmall - y * imagesPerRowOnAtlasSmall) / imagesPerRowOnAtlasSmall, y / imagesPerRowOnAtlasSmall ); //vUv goes from 0 to 1
+				} else {
+					float ai = atlasIndex;
+					if (ai >= multipleIndexScale) {
+						multiIndex = floor(ai / multipleIndexScale);
+						ai -= multiIndex * multipleIndexScale;
+						vAtlasIndex = ai;
+					}
+					if (ai >= imagesPerRowOnAtlasBig * imagesPerRowOnAtlasBig) ai -= imagesPerRowOnAtlasBig * imagesPerRowOnAtlasBig;
+					
+					float y = floor(ai / imagesPerRowOnAtlasBig);
+					vUv = vec2( (ai - y * imagesPerRowOnAtlasBig) / imagesPerRowOnAtlasBig, y / imagesPerRowOnAtlasBig );
+				}
+
+				vec4 mvPosition = modelViewMatrix * vec4( position, 1.0 );
+				float distance = length( mvPosition.xyz );
+				gl_PointSize = zoom * ( 180.0 / distance );
+
+				gl_Position = projectionMatrix * mvPosition;
+				gl_Position.x += multiIndex * 10.0;
+			}
+
+		</script>
+
+		<script type="x-shader/x-fragment" id="fragmentshader">
+
+			uniform sampler2D iconAtlas;
+			uniform sampler2D atlas;
+			
+			varying vec2 vUv;
+
+			varying float vAtlasIndex;
+			
+			const float imagesPerRowOnAtlasSmall = 128.0;
+			const float imagesPerRowOnAtlasBig = 16.0;
+
+			void main() {
+			
+				if (vAtlasIndex < 0.0) {
+				
+					gl_FragColor=texture2D(iconAtlas, vec2( (gl_PointCoord.x / imagesPerRowOnAtlasSmall) + vUv.s, (gl_PointCoord.y / imagesPerRowOnAtlasSmall) + vUv.t ) );
+					
+				} else {
+				
+					gl_FragColor=texture2D(atlas, vec2( (gl_PointCoord.x / imagesPerRowOnAtlasBig) + vUv.s, (gl_PointCoord.y / imagesPerRowOnAtlasBig) + vUv.t ) );
+					if (vAtlasIndex >= imagesPerRowOnAtlasBig * imagesPerRowOnAtlasBig) {
+						gl_FragColor.r += 0.3;
+						gl_FragColor.g += 0.3;
+					}
+					
+				}
+
+			}
+
+		</script>
+
+		<script>
+			CocoonJS.App.onLoadInTheWebViewSucceed.addEventListener(function(pageURL) {
+				// Show the webview. By default, the webview is hidden.
+				CocoonJS.App.showTheWebView();
+			});
+
+			CocoonJS.App.onLoadInTheWebViewFailed.addEventListener(function(pageURL) {
+				console.error("Could not load the HTML file in the webview");
+			});
+
+			CocoonJS.App.loadInTheWebView("webview_index.html");
+			
+			window.addEventListener("load", function() {
+				CocoonJS.App.disableTouchInCocoonJS();
+			}, false);
+	
+			
+			var documentRootPath = 'http://playfulmedia.cs.technik.fhnw.ch'; //'http://dev.ck-game.com/temp/fhnw/ctest/';, http://campartex.cs.technik.fhnw.ch:8080
+			
+			var camera, scene, renderer;
+			var geometry, material, mesh;
+			var controls,time = Date.now(), baseCameraSpeed = 1.0;
+			var focusedArtCluster;
+			
+			var gm = new GM.GestureManager().setTarget(document);
+
+			var objects = [];
+
+			//mouse detection
+			var pointerDetectRay, projector, mouse2D = new THREE.Vector3(0, 0, 0);  
+			
+			
+			
+			/************************* UI *****************************/
+			
+			// TOUCH DETECTION
+			
+	/*function fnTap(fingers) {
+		console.log(JSON.stringify(this));
+        console.log("Tap "+fingers + "  " + JSON.stringify(e) + "  ");
+    }
+    function fnDTap(fingers) {
+        console.log("DoubleTap "+fingers);
+    }
+    function fnLongTap(fingers) {
+        console.log("LongTap "+fingers);
+    }
+    function fnSwipe(fingers, direction) {
+        console.log("Swipe "+fingers+" "+direction);
+    }
+    function fnPZ(data) {
+        console.log("Pinch zoom "+JSON.stringify(data));
+    }
+    function fnPinch5(progress) {
+        console.log("Pinch 5 "+progress);
+    }
+
+    gm.addGestureRecognizer(new GM.GR_Tap(2, fnTap) );
+    gm.addGestureRecognizer(new GM.GR_Tap(3, fnTap) );
+    gm.addGestureRecognizer(new GM.GR_Tap(4, fnTap) );
+    gm.addGestureRecognizer(new GM.GR_Tap(5, fnTap) );
+    gm.addGestureRecognizer(new GM.GR_Tap(1, fnTap) );
+
+    gm.addGestureRecognizer(new GM.GR_LongTap(2, fnLongTap));
+    gm.addGestureRecognizer(new GM.GR_LongTap(3, fnLongTap));
+    gm.addGestureRecognizer(new GM.GR_LongTap(4, fnLongTap));
+    gm.addGestureRecognizer(new GM.GR_LongTap(5, fnLongTap));
+    gm.addGestureRecognizer(new GM.GR_LongTap(1, fnLongTap));
+
+    gm.addGestureRecognizer(new GM.GR_Swipe(1, fnSwipe));
+    gm.addGestureRecognizer(new GM.GR_Swipe(2, fnSwipe));
+    gm.addGestureRecognizer(new GM.GR_Swipe(3, fnSwipe));
+    gm.addGestureRecognizer(new GM.GR_Swipe(4, fnSwipe));
+    gm.addGestureRecognizer(new GM.GR_Swipe(5, fnSwipe));
+
+    gm.addGestureRecognizer(new GM.GR_DoubleTap( 1, fnDTap ));
+    gm.addGestureRecognizer(new GM.GR_DoubleTap( 2, fnDTap ));
+    gm.addGestureRecognizer(new GM.GR_DoubleTap( 3, fnDTap ));
+    gm.addGestureRecognizer(new GM.GR_DoubleTap( 4, fnDTap ));
+    gm.addGestureRecognizer(new GM.GR_DoubleTap( 5, fnDTap ));
+
+    gm.addGestureRecognizer(new GM.GR_PinchZoom( fnPZ ));
+
+    gm.addGestureRecognizer(new GM.GR_Pinch5( fnPinch5 ));*/
+						
+			gm.addGestureRecognizer(new GM.GR_DoubleTap( 1, function(fingers) {
+				
+				if (!navigationInUse) {
+					var vector = new THREE.Vector3( ( this.touchesInfo.x / window.innerWidth ) * 2 - 1, - ( this.touchesInfo.y / window.innerHeight ) * 2 + 1, 0.5 );
+					projector.unprojectVector( vector, camera );
+
+					var pos = (new THREE.Vector3()).getPositionFromMatrix(camera.matrixWorld); //camera.pos
+					
+					pointerDetectRay = new THREE.Raycaster( pos, vector.sub( pos ).normalize() );
+					raytraceObjects();
+					
+					if (focusedArtCluster._displayNearestSelectedImage) {
+						CocoonJS.App.forwardAsync("$('imageDisplay').getElement('img').set('src', '" + documentRootPath + "/campartex/services/prod/images/" + focusedArtCluster._displayNearestSelectedImage.imageIndex + "');");
+						CocoonJS.App.showTheWebView();
+					}
+				}
+			}));
+			
+			
+			gm.addGestureRecognizer(new GM.GR_LongTap(1, function() {
+				navigationCircle.show();
+			}));
+			
+			/*gm.addGestureRecognizer(new GM.GR_TouchMove(
+				1, 
+				function() {
+					if (navigationInUse) {
+						//-1 to 1, (1,1) is in the top right corner of the screen
+						mouse2D.x = (this.touchesInfo[0].x / window.innerWidth) * 2 - 1;
+						mouse2D.y = -(this.touchesInfo[0].y / window.innerHeight) * 2 + 1;
+						console.log(mouse2D.x, mouse2D.y);
+					} else {
+						controls.forwardMouseMove({
+							movementX: this.touchesInfo[0].delta.x * -3,
+							movementY: this.touchesInfo[0].delta.y * -3
+						});
+					}
+				},
+				function() {
+					controls.setMoveForward(false);
+					if (navigationInUse) {
+						navigationCircle.hide();
+					}
+				}
+			));*/
+			
+			gm.addGestureRecognizer(new GM.GR_TouchMove(
+				1, 
+				function() {
+					if (navigationInUse) {
+						//-1 to 1, (1,1) is in the top right corner of the screen
+						mouse2D.x = (this.touchesInfo[0].x / window.innerWidth) * 2 - 1;
+						mouse2D.y = -(this.touchesInfo[0].y / window.innerHeight) * 2 + 1;
+						console.log(mouse2D.x, mouse2D.y);
+					} else {
+						if (!(this.touchesInfo[0].x > window.innerWidth - 10 && this.touchesInfo[0].y > window.innerHeight/2 - 25 && this.touchesInfo[0].y < window.innerHeight/2 + 25)) {
+							controls.forwardMouseMove({
+								movementX: this.touchesInfo[0].delta.x * -3,
+								movementY: this.touchesInfo[0].delta.y * -3
+							});
+						} else {
+						if (slidePercentage == 100)	CocoonJS.App.showTheWebView();
+						//if (slidePercentage > 0) console.log(this.touchesInfo[0].delta.x/10)
+						slidePercentage -= this.touchesInfo[0].delta.x/10;
+						if (slidePercentage < 80)
+							slidePercentage = 0;
+							CocoonJS.App.forwardAsync("$('blocker').setStyle('left', '"+slidePercentage+"%');");
+							controls.enabled = false;
+						}
+					}
+				},
+				function() {
+					if (slidePercentage > 80) {
+						CocoonJS.App.hideTheWebView();
+					} else {
+						CocoonJS.App.disableTouchInCocoonJS();
+					}
+					slidePercentage = 100;
+					controls.enabled = true;
+					controls.setMoveForward(false);
+					if (navigationInUse) {
+						navigationCircle.hide();
+					}
+				}
+			));
+
+			
+			//two fingers up and down, forward/backward movement
+			var _mobileAcceleration = Detector.istouchenabled ? 5 : 1;
+			gm.addGestureRecognizer(new GM.GR_TouchMove(
+				2, 
+				function(fingers) {
+					if (!navigationInUse && fingers == 2) {
+						//if 2 fingers move it's a backwards and forwards movement
+						var travelDistance = Math.max(this.touchesInfo[0].total.y, this.touchesInfo[1].total.y);
+						if (travelDistance != 0) { baseCameraSpeed = 10 / window.innerHeight * travelDistance * _mobileAcceleration; updateCameraMovementSpeed(); } //if speed was 0 we'd continue floating with the same speed, see PointerLockControls movement implementation
+						controls.setMoveForward(true);
+					} else {
+						controls.setMoveForward(false);
+					}
+				},
+				function() {
+					controls.setMoveForward(false);
+				}
+			));
+
+
+			function updateCameraMovementSpeed() {
+				controls.setSpeed( baseCameraSpeed * zoomLevels.options.zoom );
+				controls.mobileBreaksAdjustment = 3 / zoomLevels.options.zoom;
+			}
+						
+			
+			var navigationInUse = false;
+			
+			document.addEventListener('mousedown', function(event) {
+				if (event.which == 3) {					
+					navigationCircle.show();
+				}
+			});
+			document.addEventListener('mouseup', function(event) {
+				if (event.which == 3 && navigationInUse) {
+					navigationCircle.hide();
+				}
+				
+				if (event.which == 1 && focusedArtCluster._displayNearestSelectedImage != undefined) {
+					console.log('displayNeare', focusedArtCluster._displayNearestSelectedImage);
+					CocoonJS.App.forwardAsync("displayImageDetail('" + documentRootPath + "/campartex/services/prod/images/" + focusedArtCluster._imageData[focusedArtCluster._displayNearestSelectedImage.attribIndex] + "');");
+					document.exitPointerLock();
+				}
+			});
+			
+			
+			
+			/************ THREE *************/
+			
+			function init() {
+				
+			    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 10000);
+
+				scene = new THREE.Scene();
+
+				controls = new THREE.PointerLockControls( camera );
+				scene.add( controls.getObject() );
+
+				// objects
+
+				geometry = new THREE.PlaneGeometry(4.5, 4.5);
+
+				
+				//Skybox
+				skybox = createSkybox();
+				scene.add( skybox );
+
+				renderer = new THREE.WebGLRenderer(); //Detector.webgl? new THREE.WebGLRenderer(): new THREE.CanvasRenderer()
+				renderer.setSize( window.innerWidth, window.innerHeight );
+
+				document.body.appendChild( renderer.domElement );
+
+				//
+				
+				pointerDetectRay = new THREE.Raycaster();
+				pointerDetectRay.ray.direction.set(0, 0, -1);
+				projector = new THREE.Projector();
+
+				window.addEventListener( 'resize', onWindowResize, false );
+				
+			
+				navigationCircle = new NavigationCircle();
+				navigationCircle.addEvent('load', function(nav) {
+					nav.add('images/menu_clustering.png', {x: 3, y: 1.65}, function() {
+						focusedArtCluster.relocateImages(focusedArtCluster._randomPointInCoordinateSystem);
+					});
+					nav.add('images/artSelectionBorder.png', {x: 0, y: 0}, function() {
+						focusedArtCluster._fakeClustering();			
+						focusedArtCluster._particleGeom.attributes.position.needsUpdate = true;
+					});
+					nav.add('images/artSelectionBorder.png', {x: 0, y: 0}, function() {
+						focusedArtCluster.relocateImages(focusedArtCluster._randomPointsOnSphere);
+					});
+					nav.add('images/artSelectionBorder.png', {x: 0, y: 0}, function() {
+						focusedArtCluster.relocateImages(focusedArtCluster._randomPointsOnSphere);
+					});
+					nav.add('images/artSelectionBorder.png', {x: 0, y: 0}, function() {
+						focusedArtCluster.relocateImages(focusedArtCluster._randomPointsOnSphere);
+					});
+					nav.add('images/artSelectionBorder.png', {x: 0, y: 0}, function() {
+						focusedArtCluster.relocateImages(focusedArtCluster._randomPointsOnSphere);
+					});
+					nav.add('images/artSelectionBorder.png', {x: 0, y: 0}, function() {
+						focusedArtCluster.relocateImages(focusedArtCluster._randomPointsOnSphere);
+					});
+					nav.add('images/artSelectionBorder.png', {x: 0, y: 0}, function() {
+						focusedArtCluster.relocateImages(focusedArtCluster._randomPointsOnSphere);
+					});
+				});
+				
+				
+				zoomLevels = new ZoomLevels();
+				
+				debugOutput = new Debug3D();
+				debugOutput.setText('debug' + (Math.random() * 10));
+				
+			}
+			
+			function loadCluster() {
+				focusedArtCluster = new ArtCluster({
+					clusterCenter: new THREE.Vector3(0, 0, 0)
+				});
+		
+				//focusedArtCluster.queryForImages();
+				
+				//setInterval(function() {
+					//if (controls.getVelocityFactor() < 0.4) focusedArtCluster.displayNearest(controls.getObject().position);
+					//focusedArtCluster.displayNearest(controls.getObject().position);
+				//}, 300);
+			}
+
+			function onWindowResize() {
+
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize( window.innerWidth, window.innerHeight );
+
+				animate();
+			}
+
+			function animate() {
+				//indicate an animation for the next repaint
+				requestAnimationFrame( animate );
+
+				//perform the updates
+				controls.update( Date.now() - time );
+				if (focusedArtCluster && focusedArtCluster._loaded) { 
+					//focusedArtCluster.rotateImagesTowardsCamera();
+					focusedArtCluster.displayNearest(controls.getObject().position);
+				}
+				//Don't raytrace when just moving with the finger on touch. 'cause we need no image hover on touch-devices.
+				if (false && focusedArtCluster && (!Detector.istouchenabled || (Detector.istouchenabled && navigationInUse))) {
+					pointerDetectRay = projector.pickingRay(mouse2D.clone(), camera);
+					raytraceObjects();
+				}
+				
+				//render the updates
+				renderer.render( scene, camera );
+
+				time = Date.now();
+				
+				//console.log('#textures in memory ', renderer.info.memory.textures);
+			}
+			
+			
+			
+			function raytraceObjects() {
+				
+				if (controls.enabled || navigationInUse) {
+				
+					//RAYTRACING
+					
+					var intersects = pointerDetectRay.intersectObjects( navigationInUse ? navigationCircle.navigationMeshContainer.children : focusedArtCluster.object3D.children );
+					
+					/*if (navigationInUse) {
+						var geometry = new THREE.Geometry();
+						geometry.vertices.push(pointerDetectRay.ray.origin.clone());
+						geometry.vertices.push(pointerDetectRay.ray.origin.clone().add(pointerDetectRay.ray.direction));
+						var material = new THREE.LineBasicMaterial({
+							color: 0x0000ff
+						});
+						var line = new THREE.Line(geometry, material);
+						scene.add(line);
+						
+						console.log(intersects.ray.origin.equals(contols.getObject()), intersects.ray.direction);
+					}*/
+					
+					var noIntersections = true;
+					
+					if (intersects.length > 0) {
+						var nearest = {distance: 999999};
+						
+						Array.each(intersects, function(el, index) {
+							if (nearest.distance > el.distance) nearest = el;
+						});
+						
+						if (nearest.distance != 999999) {
+						
+							if (!navigationInUse) {
+								//border highlighting function
+								focusedArtCluster.options.artBorderSprite.visible = true;
+								focusedArtCluster.options.artBorderSprite.position = nearest.object.position.clone();
+								focusedArtCluster.options.artBorderSprite.scale = nearest.object.scale.clone().multiplyScalar(0.92); //.multiplyScalar(1.18)
+								
+								//focusedArtwork = nearest.object;
+							} else {
+								//it's the navigation
+								nearest.object.hover();
+							}
+							
+							noIntersections = false;
+						}
+					}
+					if (noIntersections) {
+						if (!navigationInUse) {
+							//make border sprite invisible
+							focusedArtCluster.options.artBorderSprite.visible = false;
+							//focusedArtwork = undefined;
+						} else {
+							navigationCircle.resetHover();
+						}
+					}
+				}
+			}
+			
+			
+			init();
+			animate();
+			setTimeout(function() {
+				loadCluster();
+			}, Detector.istouchenabled ? 2000 : 0);
+			
+			// ------------- LOD ----------------
+			/*var _frustum = new THREE.Frustum();
+			var _projScreenMatrix = new THREE.Matrix4();
+			camera.matrixWorldInverse.getInverse( camera.matrixWorld );
+
+			_projScreenMatrix.multiplyMatrices( camera.projectionMatrix, camera.matrixWorldInverse );
+			_frustum.setFromMatrix( _projScreenMatrix );
+			if ( this.autoUpdateObjects ) this.initWebGLObjects( scene );
+			renderList = scene.__webglObjects;
+			try {
+				for ( i = 0, il = renderList.length; i < il; i ++ ) {
+					webglObject = renderList[ i ];
+					object = webglObject.object;
+					if ( object.visible && object.material.map) { // to distinguish between axis lines and cubes
+						if(_frustum.intersectsObject(object)){
+							var distanceFromCamera = new THREE.Vector3(0,0,0);
+							var d = distanceFromCamera.subVectors(object.position, yawObject.position).length()
+							if (d < 100) {
+								
+								console.log(d);
+								
+							}
+						}
+					}
+				}
+			}
+				catch(err){
+				console.log('not yet')
+			}*/
+			// --------------------------------------------------
+
+			
+			/*setTimeout(function() {
+				CocoonJS.App.forwardAsync("webGL_loaded();");
+			});*/
+			
+			/*
+			var xhr = new XMLHttpRequest();
+			xhr.onreadystatechange = function () {
+				if (xhr.readyState == 4) {
+					var obj = eval("(" + xhr.response + ")");
+					console.log(obj);
+
+					for (var i = 0; i < obj.length; i++) {
+
+						var image = new Image(), texture = new THREE.Texture(image);
+
+						texture.mapping = new THREE.UVMapping();
+						texture.format = THREE.RGBAFormat;
+						texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
+						texture.minFilter = texture.magFilter = THREE.NearestFilter;
+
+						texture.needsUpdate = true;
+						image.src = "data:image/png;base64," + obj[i].byteArray;
+
+						material = new THREE.MeshBasicMaterial({ map: texture });
+						var mesh = new THREE.Mesh(new THREE.CubeGeometry(4.5, 4.5, 4.5), material);
+						mesh.material.side = THREE.DoubleSide;
+						mesh.position.x = obj[i].rgbvalue.r*5;
+						mesh.position.y = obj[i].rgbvalue.g*5;
+						mesh.position.z = obj[i].rgbvalue.b*5;
+						scene.add(mesh);
+
+						objects.push(mesh);
+
+					}
+				}
+			}
+			//xhr.open('GET', 'http://campartex.cs.technik.fhnw.ch:8080/campartex/services/images/streams/values/rMin=150;WIDTH=161;HEIGHT=100', true);
+			xhr.open('GET', 'http://campartex.cs.technik.fhnw.ch:8080/campartex/services/metadata/getImagesByArtist/artist=leonardo;width=10;height=10', true);
+			xhr.responseType = 'json';
+			xhr.send(null); 
+			
+			var imgData = JSON.decode('[{"metaDataImage":{"uid":"5257fb65e4b08f9531d297d8","url":"/var/lib/tomcat7/webapps/campartex/WEB-INF/artworks/art10.jpg","title":"art10","artist":"leonardo"},"byteArray":"/9j/4AAQSkZJRgABAgAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAAKAAoDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDpL+S4+13j3DvE9rNh1V2KNEUyCV3YABKEtjIxnIxgWImvDCh+x6fJlR85vSN3vxFWfLLIs95iRxtNpIMMeGadwzfUjqe9WrmaWK6mjjkdEVyqqrEAAHgAV5DnLmc4u1/82dLjGKUWrn//2Q=="},{"metaDataImage":{"uid":"5257fb65e4b08f9531d297dc","url":"/var/lib/tomcat7/webapps/campartex/WEB-INF/artworks/art2.jpg","title":"art2","artist":"leonardo"},"byteArray":"/9j/4AAQSkZJRgABAgAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAAKAAoDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwBulfEGLWtZ06xEs0b3NpIklyBk2zlmPzKoAc4VACoXhskknC5a/Hu9CgNoFoSByRK1eeeHyftMr5O9I49rdx++jHH4Ej6GscgZ6Cs4RSbHJLTQ/9k="},{"metaDataImage":{"uid":"5257fb65e4b08f9531d297e0","url":"/var/lib/tomcat7/webapps/campartex/WEB-INF/artworks/art8.jpg","title":"art8","artist":"leonardo"},"byteArray":"/9j/4AAQSkZJRgABAgAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAAKAAoDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwA1LxNF4c1eG11SSaaa6QyrIlskptYtymRcqyv5YCMclDnAPJQiut3V5P8AEGCGX4s6DHJEjxyi2EisoIcGZgQR344r1g9ayUbanu0JuU5rsz//2Q=="},{"metaDataImage":{"uid":"5257fb65e4b08f9531d297e4","url":"/var/lib/tomcat7/webapps/campartex/WEB-INF/artworks/art3.jpg","title":"art3","artist":"leonardo"},"byteArray":"/9j/4AAQSkZJRgABAgAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAAKAAoDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDJuNelt32GYIXY7WuJshkX+EDbweQcdOGAHHNd9f8AEMEjRJaRTIhKrI1sSXA4ySCBz9BXI6n/AK21b+LZcc9+Bj+XFPaWQMQJHAB9a4lRhFaI6ZV6k3dyP//Z"}]');
+			console.log(imgData);
+			var image = new Image();
+			image.src = "data:image/png;base64," + imgData[0].byteArray;*/
+		</script>
+	</body>
+</html>

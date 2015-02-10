@@ -1,0 +1,406 @@
+﻿<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title>Kunstexploration 3D</title>
+		
+		<!-- Latest compiled and minified CSS -->
+		<!--<link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css">-->
+
+		<!-- Optional theme -->
+		<!--<link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap-theme.min.css">-->
+		
+		<link href="css/custom-theme/jquery-ui-1.10.3.custom.css" rel="stylesheet">
+		<style>
+			html, body {
+				width: 100%;
+				height: 100%;
+				background-color: transparent !important;
+			}
+
+			body {
+				margin: 0;
+				overflow: hidden;
+				font-family: arial;
+			}
+
+			#blocker {
+				position: absolute;
+
+				width: 100%;
+				height: 100%;
+			}
+			
+			#loaderImage {
+				position: absolute;
+				left: 50%;
+				top: 50%;
+				margin-left: -64px;
+				margin-top: -64px;
+				width: 128px;
+				height: 128px;
+				background-image: url(images/preloaderSprite.png);
+			}
+
+			#instructions {
+
+				width: 100%;
+				height: 100%;
+				
+				position: absolute;
+
+				color: #ffffff;
+				text-align: center;
+
+				cursor: pointer;
+
+			}
+			
+			#contentContainer {
+				width: 100%;
+				height: 100%;
+				border: 1px solid black;
+				position: absolute;
+				overflow: auto;
+				color: #FFF;
+				text-align: center;
+			}
+			
+			#filterMenu {
+				background-color: rgba(245,245,245,0.3);
+				background-image: none;
+				border: 0px;
+				z-index: 1000000;
+				list-style-type: none;
+				padding-left: 0;
+				margin: 0;
+			}
+			
+			#filterMenu li {
+				line-height: 48px;
+				padding-top: 10px;
+				border-bottom: 1px solid rgba(0,0,0,0.2);
+				cursor: pointer;
+			}
+			
+			#filterMenu li:hover {
+				background-color: rgba(245,245,245,0.2);
+			}
+			
+			#filterMenuContainer {
+				width: 72px;
+				position: absolute;
+				margin: auto;
+				position: absolute;
+				top: 0; left: 0; bottom: 0;
+			}
+			
+			
+			/* Content container "Image / Art display" */
+			
+			#imageDetailDisplay {
+				background-color: rgba(0,0,0,0.5);
+				width: 80%;
+				height: 80%;
+				left: 10%;
+				top: 10%;
+				display: none;
+				margin: auto;
+				overflow: auto;
+			}
+			
+			#imageDetailDisplay > img {
+				max-width: 100%;
+				max-height: 300%;
+			}
+			
+			#imageDetailDisplay > div {
+				margin-top: 20px;
+			}
+			
+			
+			
+			#navigation {
+				position: absolute;
+				left: 50px;
+				top: 50px;
+				width: 282px;
+				height: 135px;
+				color: white;
+				font-family: "Verdana", Geneva, sans-serif;
+				font-size: 0.8em;
+				display: none;
+			}
+			
+			#navigation > img {
+				position: absolute;
+				visibility: hidden;
+			}
+			
+			.ui-dialog {
+				background-color: rgba(217, 217, 217, 0.33);
+			}
+			.ui-dialog-title img {
+				height: 14px;
+			}
+
+            .ui-dialog, .ui-dialog-content {
+                font-size: 0.8em;
+                font-weight: bold;
+            }
+
+            #filterSettingsDialog > div {
+                padding-bottom: 1em;
+                margin-bottom: 1em;
+                border-bottom: 1px dashed #453f3f;
+                line-height: 2em;
+            }
+
+            #filterSettingsDialog > div > div {
+                margin: 1em 1em 1em 1em;
+            }
+
+            #filterSettingsDialog > div > span {
+                margin-right: 0.5em;
+                float: right;
+                font-weight: 600;
+            }
+
+            #filterSettingsDialog > div > input {
+                position: absolute;
+                left: 110px;
+            }
+
+            #filterSettingsDialog > div > button {
+                position: absolute;
+                left: 260px;
+            }
+
+            #filterSettingsDialog > div > h4 {
+                font-size: 14px;
+            }
+
+		</style>
+		
+	</head>
+	<body>
+		<script src="CocoonJSExtensions/CocoonJS.js"></script>
+		<script src="CocoonJSExtensions/CocoonJS_App.js"></script>
+		<script src="CocoonJSExtensions/CocoonJS_App_ForWebView.js"></script>
+		<!--<script src="js/preloader_image.js"></script>-->
+		<script src="js/Detector.js"></script>
+		<script src="js/jquery-1.10.2.min.js"></script>
+		<!--<script src="js/bootstrap.min.js"></script>-->
+		<script src="js/jquery.mobile.custom.js"></script>
+		<script src="js/jquery-ui-1.10.3.custom.js"></script>
+		<!--<script src="js/mootools-core-1.4.5-full-nocompat-yc.js"></script>-->
+		
+		<div id="blocker">
+
+			<div id="instructions">
+				<!--<span style="font-size:40px">Click to start</span>
+				<br />
+				(W, A, S, D = Move, MOUSE = Look around)-->
+			</div>
+			
+			<div id="contentContainer">
+				<div id="filterScreenDisplay">
+					<input type="button" value="Query" onclick="javascript:queryURL()"></input>
+					
+					
+					<div id="filterMenuContainer">
+						<ul id="filterMenu">
+							<li><img src="images/menu_home.png" /></li>
+							<li><img src="images/menu_filter.png" /></li>
+							<li><img src="images/menu_data.png" /></li>
+							<li><img src="images/menu_connections.png" /></li>
+							<li><img src="images/menu_basket.png" /></li>
+							<li><img src="images/menu_options.png" /></li>
+						</ul>
+					</div>
+					
+					<div id="clusterSettingsDialog" title="Clustereinstellungen">
+						<select id="clusterMethod">
+							<option value="rgb">RGB</option>
+							<option value="cedd">CEDD</option>
+						</select>
+					</div>
+					
+					<div id="filterSettingsDialog" title="Filtereinstellungen">
+                        <div>
+                            <h4>Otto Meyer-Amden an Herrmann Huber</h4>
+                            <input type="checkbox" id="getManuscripts" checked="checked" />Manuskripte<br />
+                            <input type="checkbox" id="getTranscriptions" checked="checked" />Transkriptionen
+                        </div>
+                        <button id="saveButton">Save</button>	
+					</div>
+					
+					<div id="optionsDialog" title="Optionen">
+						<label for="maxImages">Maximum amount of images loaded:</label>
+						<input id="maxImages" value="10000" />
+					</div>
+					
+				</div>
+				<div id="imageDetailDisplay">
+					<!-- Container for displaying an art image + description and metadata -->
+					<br /> <br />
+					<img src="Spektrogramme/spectrogram1.jpg" />
+					<div>
+						FLARE ID: 10091521, START TIME: September 15 2010 17:09:00, PEAK TIME: September 15 2010 17:13:10, END TIME: September 15 2010 17:24:24, DURATION: 924 sec, TOTAL COUNTS (4-8 KEV): 3873350 counts, TOTAL COUNTS(10-15 KEV) 221552 counts, GOES CLASS: B9.1, MAXIMUM COUNT RATE (4-8 KEV): 5014 counts/sec, MAXIMUM COUNT RATE (10-15 KEV): 1422 counts/sec, X-POSITION: -834.429 arcsec, Y-POSITION -473.252 arcsec, RADIUS: 959.291 arcsec
+						<br /><br />
+					</div>
+					<img src="Spektrogramme/clean_natural_4-8.png" />
+					<img src="Spektrogramme/clean_natural_10-15.png" />
+					<img src="Spektrogramme/clean_uniform_4-8.png" />
+					<img src="Spektrogramme/clean_uniform_10-15.png" />
+					<img src="Spektrogramme/lightcurve.png" />
+					<!--<iframe style="width: 100%; height: 1500px;" src="https://www.khronos.org/registry/webgl/sdk/tests/conformance/more/functions/texSubImage2D.html"></iframe>-->
+				</div>
+			</div>
+
+		</div>
+		
+		<div id="loaderImage"></div>
+		
+		<script>
+			
+			var filterObject = {
+			    manuscripts: true,
+				transcriptions: true
+			}
+			var documentRootPath = 'http://playfulmedia.cs.technik.fhnw.ch';
+			
+			
+			$( document ).ready( function() {
+				$('#instructions').on('tap', function() {
+					CocoonJS.App.forwardAsync("exitWebView();");
+				});
+				$('#instructions').on('click', function() {
+					CocoonJS.App.forwardAsync("exitWebView();");
+				});
+				
+				//outgoing events for the pointer lock controls
+				if (!Detector.istouchenabled) {
+					document.addEventListener('keydown', function(event) {
+						console.log('keydown CLIENT');
+						CocoonJS.App.forwardAsync("controls.fireKeyDown(" + event.keyCode + ");");
+					}, false);
+					document.addEventListener('keyup', function(event) {
+						CocoonJS.App.forwardAsync("controls.fireKeyUp(" + event.keyCode + ");");
+					}, false);
+				}
+		
+		
+				var openMenuDialogs = [];
+				$("#filterMenu li").click(function(event) {
+						var index = $('#filterMenu li').index(event.currentTarget);
+						var panelId;
+						
+						switch (index) {
+							case 0:
+								CocoonJS.App.forwardAsync("exitWebView();");
+							break;
+							case 1:
+								panelId = 'filterSettingsDialog';
+							break;
+							case 3:
+								panelId = 'clusterSettingsDialog';
+							break;
+							case 5:
+								panelId = 'optionsDialog';
+							break;
+						}
+						
+						if (panelId) {
+							$('#'+panelId).dialog("open");
+							
+							openMenuDialogs.push(panelId);
+							$('#'+panelId).prev('div').children('button').click(function() {
+								//reset position, take out of opened list
+								$('#'+panelId).dialog( "option", "position", { my: "left center", at: "right center", of: $("#filterMenu") } );
+								openMenuDialogs.splice( $.inArray(panelId, openMenuDialogs), 1 );
+							});
+						}
+				}).hover(function(event) {
+						var index = $('#filterMenu li').index(event.currentTarget);
+						
+						switch (index) {
+							case 1:
+								$('#filterSettingsDialog').dialog("open");
+							break;
+							case 3:
+								$('#clusterSettingsDialog').dialog("open");
+							break;
+							case 5:
+								$('#optionsDialog').dialog("open");
+							break;
+						}
+					},
+					function(event) {
+						
+						if (openMenuDialogs.indexOf('filterSettingsDialog') == -1) $('#filterSettingsDialog').dialog("close");
+						if (openMenuDialogs.indexOf('clusterSettingsDialog') == -1) $('#clusterSettingsDialog').dialog("close");
+						if (openMenuDialogs.indexOf('optionsDialog') == -1) $('#optionsDialog').dialog("close");
+					
+					}
+				);
+				
+				dialogs = [
+					$('#clusterSettingsDialog').dialog().dialog("close"),
+					$('#filterSettingsDialog').dialog().dialog("close"),
+					$('#optionsDialog').dialog().dialog("close")
+				];
+				
+				//set dialog titles
+				dialogs[0].prev('div').children('span').html('<img src="images/menu_connections.png" /> Clustereinstellungen');
+				dialogs[1].prev('div').children('span').html('<img src="images/menu_filter.png" /> Filtereinstellungen');
+				dialogs[2].prev('div').children('span').html('<img src="images/menu_options.png" /> Optionen');
+				
+				//stopAnimation();
+				$('#loaderImage').css('display', 'none');
+				
+				$('#maxImages').spinner({
+					incremental: true,
+					min: 1,
+					step: 1000,
+					page: 10000
+				});
+				
+				
+			});
+
+
+			$('#saveButton').click(function () {
+			    filterObject.manuscripts = $('#getManuscripts').val();
+			    filterObject.transcriptions = $('#getTranscriptions').val();
+			});
+
+			
+			function queryURL() {
+				var url = documentRootPath + '/campartex/services/prod/clustering/';
+				url += $('#clusterMethod').val();
+				url += '?maxCount=' + $('#maxImages').spinner( "value" );
+				url += '&filters=' + JSON.stringify( filterObject );
+				CocoonJS.App.forwardAsync('focusedArtCluster.queryForImages(\''+url+'\');');
+			}
+			
+			$( window ).resize(function() {
+				//set menu height
+				$('#filterMenuContainer').height($("#filterMenu").height());
+				
+				$.each(dialogs, function(i, d) {
+					d.dialog( "option", "position", { my: "left center", at: "right center", of: $("#filterMenu") } );
+				});
+			});
+			
+			function displayImageDetail(url) {
+				$('#imageDetailDisplay').css('display', 'block')
+					.children('img').first().attr('src', url);
+			}
+			
+			/*var imgData = JSON.decode('{"metaDataImage":{"uid":"5257fb65e4b08f9531d297dd","url":"/var/lib/tomcat7/webapps/campartex/WEB-INF/artworks/art1.jpg","title":"art1","artist":"michelangelo"},"byteArray":"/9j/4AAQSkZJRgABAgAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCABkAGQDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDxNYh9mlfYxZSqAg8LnJ5H944+gG72qR7VkcrKkhCqUYYCur7en/fXXvgGkBjZJtwi+ZwQCzKdvzdD3HI5PPTtmpCFBbBgOYFYZJZgfl4BwMH+Qz161QyGSIkhJFdWdzgkYBGBz19OT7fWkkVMyPtdCAdvTaOnyn1OD+f1qWKERF2QqreXgATAH5gAeo5yG6dQD7GpnhlkFrAY5IwbfKhn4IOTnIByM4Pt93jGaBN2V2VPkilQOsbDYcrkEZI9R6ZB/CpooI5YIYog0jyP80USMZBjJweMYI9D2yRXW2vh21s4POLJdSiMSO6xFo1I5z8y5Ix16D5jjptrRiSKCzjfeoiZgrRbPNRSANmflK84Yr3wMYIB3a+xk1ucksZFOyVzmrDwtrN3Mgt7ZMIu4uFGx17AhMnnOCTjHIPIro7D4cM0s8c8FzdOFVzErLkseh+9kdeh65ByQCwSdpd8MlwTbxxOXjiSTzPLBY/MSDgqeBkuD1IPODYTWrjTGjmuk+2OyfPK+fNjbI3bZPvMcN0JBUkdNpJ4sRhcS17k1+X6/wCR2UMTS3lH9RLXwJZalbSERRQzN87Ks7NMATwMjeoyB7n5h9K5vWfCl1p0s0UBWZCyqgkYGQDBGAQcOPu9BnO3AGcHqLTU9Ov3+zW0M4EiOAs53NnoUjYMN5APQAAc8d6ivEtLy6l0y6+0QRlxGoupPszRv8pTzOxySx4XoB1AJHmU6mKp1XGd7djvlGhOF4nFvDHGjmMYtndWjikQtkAnLKc4yOhHI5IJyKZ5cU1uvlgQFmxcKgB3YA2suTnPJJHAzzjoBbm09bu5kJ86KdpMFLhi00mSACihQGPVcbsnrxg1BcaZOkcs6oBLGypNngB252DPU9cqACuCOea9mMrq550lZmfO4gnaNpN5BwSuBjHGOnbFFXpNElhkKEmV+C4gtmkEZIztJ4GQCMgZxnrnNFAaGfukSSVQ+OGDB4s9/Q/dPJ+n41IzKwtQUgDMvz8bcksfvdh6jjGCO3Aaux98W/bEVD7RJ8vH6dzjPOeKNzbgx3nch5VC2SM8/N6kZJ9CfemUMAHlRFhEV3sHC8E9Op7Dp7cV23hLR5b1SbCzcuG8xyhBUDaAvDHBcbmPH+0QMDjjst5MU5cKC5jOwbeBhucD5uoPOSMDPavZPDV9b6Xp+naX9lCpcQ2xSQfMksjqx5fBDfOrjbyMZxwMHGtiHQSkldl08PGu+SbsjGvtB1fyVub7TmDM4UqS8oGOQCVJwSePx7/NjJlu2UyQR3ADGJm/uKoB5GSCX6EnGBnqcKBXp99qFlBemW4jXILxmPgHoVOV4JPDdedvXk4rkdSsbHV7a+u7eIW2FLSqCC20YYEgkGQZGeQexyOKxpZx71qkdO6HWyaO9OXyZzUdxJKGnhmiuFJL+dO5DK+DkAk5CnqScZ2hcsB81TUtRs0SW0IcOwLMZZCYwOgwF++wz97heThTwacYmkiZWtp5I/mTAQBWwpfcZDktj5iFOeMc4AzVMNsUNxHfT3DvbfOibljGABsJzuYBA2MgHjBGATXrKvFq8Hc4PYyi+WasTFrd1BSMTyXErAymQiVlZfn2oMDbnruO4h1A7mp9NawvNQ+0XRLl5RFG+wvs5x+8Yr8zBWGCMHjnGOcaJYoCiLIshjK+bvGRFhwSAvCSD5c8khhjpW94SmNvqkcIEpmke3w0xYOiK4YMpA+UDaDg4GD17jixC5oN+R0UvdkkQa4XXV9TvYLUWLxXAaDYxDjPYc9c/MT1yOMAEjDs5b2Zv7OjUM+dse3qCAflUjpnnp17mu31GR7q8uv7UnhZb7LMjIQwaQhVxwSNrYO3JA+o55vSYiyaruiSGP7D56NswVOdyYVs7ic4BJzjnPTOGFleFvQ3xEfe1MKWVXYEpCoxwjs3yDJ4A7Dv36mir0l7cpMxtppoEcKxW3uGVSdoySBxk0V0XMTOaNGkiLh8bMEhFHVCQf5e5HTmgoXt4xhCGlIQEfKx46c7j2GTwOPU02JwkkBCtuVd4GNhJ29yOe3bk9RgtU8RQRphZiGuSOqpuAxgb+eeRxyF69+KKGvDlpJGXABBZZGCknGenfuAR7HjNe5R+G9MimtNUdpY4oVWSBZkMmIvvDDZO3J5IweRxjJNeGmLyraZGU71lVRhcDo3c/MO/GPr0GfYbbVI9R8B6cbdraGQRDfGX2uzIMEB+T1BIBDZzn0rzcenaLO3B2u00SWc9ze65cahJIZMs0iLKWyrcKCqcZJz3ABwR61lappeq3niBp7AixKW+Fgt4F8qLOS3oDliSSem7/ZWnaTf6guqRGWKJLRRgyLEy+YpIGUwu4naVxu6hscggHdupZYYUKbN8UwLRFyhVucMqlcA+mBzwPSvHdSdKVovf5o71CFSN2jgLvTp4ld55leJxu8sx7MMem4kADkgjoDtOOBish4TcTmOW6S2h2ooMjkrgbQR0zxxwc8KOTgbuh13UhPZlreOd4gw/eSFSQxVs4zk8g89c8cjAFYLQT/ZmltpktyyMkolmEbFeAQd2M5x0X8cV7GEqTUVc4sRTjIqSpEl4kcsyNMq9RKoUDPUnkZOeRyRzkkjjX03UJ7rWrKaZpPNRkDJtIDYIwCyjgFRwR12DrgViTypb2EltCvmwtGGLynnzAedq7sdM4JGcMexrW8NSt9v0xXjd5JLyCaB3Y/vERtu0KT2ZiOwIJ5GK7azbpyt2Z59OCVRXOz1uEC8tY7WCGOWbTjAkQfa0hR1ZGAAzkspHcZB5GefOfNvIbJY4vtDeWyyNGg+UlS3zsBkcFlHI74B6167fSNaeJvDbyRNJfW3myTOXxtjeUBcAjlssvthSOlcvq+lwWWoalo5O0/bFuvtMyfK0brmMckbV+YKTkYIbk9BxZdO8VDra/4nRjU4vmfc4pp9Rs7ieKx3vFvyTGN43bRnkEg/mfqetFSQXkVkrW4tIyyMQ+bwxYYcEYVgD06/rjFFeic2pijYz2zK6o3lYy5JwwHGGHPp6YJx0FSW20SwOBD8pLFXjYg4Ofm7YI647Kc+8McojiQbuWI3N0K4zjkAnHQ9jx34NSbysknIdjJuLSuASBjBK9D175/nllk8LPshaASrOsmY9oLZcc5Xt2Tjk5UV0vgzyr2efRZ5JPstyrvFG65HmhScggY4XIz6kHA6jlpkEW+AmA7WDfLIwzwegPfnkHn261KEktm/dTbQxR1kjdiqjk4PGQQe/wBeoIrKpDnjYqnN05qSPSn0mTTL6GGWSbEqgEYCYAYsUBIGCeoJ5yKnnedv9S7bAMNHGzS7G27tu1vUnoc7SOuMZ8+t/E2pqPs5vZJI0wIlCo/ynrkHknBGPmyDwOeml4VF9qeoxwR2NxqELum6LBbyi3BfP3dnH8eOvGfmz5VTBVbOUmnY9BY2Deisb0ptrVphcAxy72ykIV5IQMEAbT833ewTHUHFZMJtr65t0v3a307ymym+LllUqvzM6hucHaSvBwDwhPrEPgnRdGT7frDwrFGrBNwMcaH7yjAO5zgnA9MjBFc1f/EXQtJu5H0nwpbJcMrYa6iFu6sSQQUVTu/u4z37YOLwsXF3luY16ntFaB5OumXl3cyJZ2zvDJloSSoUKT1ODtHQA9AMc4xW7YWTaXd6JPc+VJcC5Uyq4OREcdDjDRqFBJBIG4Y4zlNf8e+JdTkntJrxEjlfc8FquzftyAGIJO3BzgMRjHpkYw1m6Zp55L2drWSZcQPMQrsuMEhcAhRjGMAZXsMV6LUpKz2OJXTPY9Rv7a/nZ3j2rHYTEsWyXI8mQAMy4ZQyuQRnrwPXI8WTQN4ns9SuGMcd9CscJL5BK44kBHdXAyMjnGMZrW3Wt9oLQyTI3mxYdIQOcOyoNp9nA4wehzzk4erQw3Wl2TJP9nuLe9CbZmLBRLE+fvMqnGwgH+LjrkZ8fLp/vY29DvxsE6Tv2PKb6C4bULkylmk8xtzOpBY5zkj3GDRXUX+rppssWIBILmMXACSMqrnIIAB4yQT0H3jgAYor3pRs2jzIT5opnMpgTQmMxfu4i2QDgcZzgc7gT+BHHFRLKEt1RkdsSFypHy9uMds45IPp6UoRJLlFLMi7PveTg9B2H+fXqTSoMvCnk7zuOIxPhuTwo9Oe3Xk+vAakhaSTzQm7ghgVAVBkk8f3f6YOelOBwreWkTuU2FNu10ClfmU9CSPQnjdwBg1FmJpgyeQGLkt8zKu3+6Ceg4PPX5h3FDIHkcznjnesYxtXcByMfL/TjjtSEK7NcmN3aRnK4feAO5wR6g4GffJ716V4Y8R3Xhrw5Hp+j6WkVxcSAy3BTfM77eduV2YGcYOeD05JrhdLt5ZZvtTssYyRHmQ/NjA2qc9ACe/9M9e10EhtnFtbukSjJ83ChGwjliehIMZBGMEYIPOOHF1ZJ8sTroUYtc0jSvL6S9VRdSJdyGSTyvMdpRIG4xvBypXLE9B8o45IPH6pJK8ZkEhkuSQYzKMt5TjCg71BYBcYIzxtwRgV0SC3tHNzNJMQMPN5qErA3GMqDg8MMjtwCAOaz9fsI5LZ0sUlLwSbI5ZbhpVuX5Lbc/Jnkng84I+bPPFhZKM7Svr/AF/X+R01Yvl905zU3aG8k89ZoCVdfNDBlcYA2oMYUHoTljj15DZrPyFlKEkAE7PuYyMDsSRznk85z1qwNOlMTSyKDFHOYwMZYud2FKkggfL3xj5uvSodk8gYKhUTv5hIbBKZ4yOBxhuwxyenT2l2PNfc9W8IXJ1bRkhmB3XEU4Msi79r7SQW3EZbgEHOenU81zXie5tl+yz2giQMkMxaLhN6gqVHHcdckjOck81T0G6uJNNl8tt0cUyyXEkbFdu/G0Y7YKn5h0JI6YNW/ENxDBpWnXELFN0TWs6NuyApYEryMBt5YpuxnkE5NcdLB+xr+03Tb+XX+vQKuL9rH2WzSXzOj0rRbc6bD9otVaYA+ZmYqQc9CARg/wA+veiuW1TxpGdRkaLS0mjIXY7Tu5KhQFyeOcAZ75zmis6kcc5txnp8hwjQ5VeGpyZkBmLQklUjOTgrszxwQScc45xnPqc0hkjIgfMX+qw5ZCeQTgA464A/lwM1G7GQyyyNHvOdzMckkknPuTgjPTp0qSNikkal51xAfl2g4yp6exz17Zz2r0iRJDCqQEs0jMpLZXGOSMZPB4AIOBgsfSnRtHJNErSA75QpJbDIn3SN5IXByevoOmTTE89FTHmKI1ctg/cUnByO2c459fetjQbG5uYvt+I5bWxcyFJuVY4JPy8A46kcnGO1Z1KipxcmOMXJ2Rc062utPtoGuDLFKAZ4rYoeBvxg7un3W5AJzjPqOnnfTkjnLRLI+ZBFNK7YQkHgYyp+91A6Zz61DbW8Muji+vBIjQlk8grypByoYnHzZGMgcDBxknFCw3arqCRylFttpeVUU/uSz7sEn7qnI556DjIIPizvWbm3bl3/AMj042haJJdalHJcyo7Qma4jMzRllKOzYIyxJDfMCcHGAPvZGKBJAl3LZ3JLCWKNA4zhiQmNhYDH8JGVI/iGeA2Bq1u6a01pZXLKUAILzDCcbiAwOAuctnjrk++1oumR3cE13eTG5mAzFGnC5yd7MRyww2dwIPPoAa3nTjCmp30IjNuXLY5W9uLeLAihjMiyh5JCeTnPGM+/UY7dKia8iu7i2WdXWFJAgywGE44yFHPXLY5JzWrqVvbWVzcRxoWERKJMpUB1GR1wDuJ6EAdCTkcDLa58yba9tGr/AHQu3OCBgcZ9snHHt2r1ItOKaOKaakXtKv5LFkhs2LSXBKTCRgVxyNuT1yvGM856dMOur2+udPitlgj8uS3bJXhiol6yZ64254xgYzwCKryTRR3cVuJI5k4R2Y7QRuJIBx8vLMM+nPGcU+XWmmMrkkNI4lKr8uDzj7oA3cnJ6kdxzWik7WOeVKPPzW1KCWrqil54o2IzsfAYemQfbn8aKimukDAKAwx1ZSO/YAgAf/XopFkP2iURvCGGxsZG0fp6dO1WG3ysVeWQgx9N3AG/GB7e1FFADhEHkEhd8iMlfmztwAQBntzXSaZLLPFYxGTajqQyxoqghg2QQByOOhoorkxnwL+uh04b4mNlvrmRktBKY4DwFQDAGOnPUemc47YrM0S/uF1lY0ZUEkRhYqoGVCn9ffrRRWNOK9jLToazb50VrzVLprk3asiOwMWwICoUDHAOff8AOtTQryZLdYQw2SSlSD246j3+UUUVVZL6ugpN+2Zi6hPNPPI8shdiSxLAEkkjOf8AP0qpjJK5OAwUfSiiu2CtFHJU+Jlu/h5ldpHdkMcYLHsUz+mMU+2tIptWNswIRrgQAgnKgtgke+Pw56UUVRBFqsSW72piQKJbdZSvUAkngd8fWiiigZ//2Q=="}');
+			console.log(imgData);
+			$('imageDisplay').getElement('img').set('src', "data:image/png;base64," + imgData.byteArray);*/
+		</script>
+	</body>
+</html>
